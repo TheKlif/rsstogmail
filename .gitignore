@@ -1,0 +1,6 @@
+__pycache__/
+.env
+feeds.txt
+sent_items.txt
+rss_errors.log
+*backup*
