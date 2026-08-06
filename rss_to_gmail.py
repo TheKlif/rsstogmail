@@ -7,7 +7,10 @@ import os
 import traceback
 import time
 import msvcrt
+import re
+import requests
 from urllib.parse import urlparse
+
 
 # -------------------------------
 # Debug toggle
@@ -25,6 +28,68 @@ def normalize_url(url):
     if host == "ext.penny-arcade.com":
         host = "penny-arcade.com"
     return parsed._replace(netloc=host).geturl()
+
+# -------------------------------
+# Image extraction (feed-provided only, no page fetch)
+# -------------------------------
+def get_entry_image(entry):
+    if hasattr(entry, "media_thumbnail") and entry.media_thumbnail:
+        url = entry.media_thumbnail[0].get("url")
+        if url:
+            return url
+    if hasattr(entry, "media_content") and entry.media_content:
+        for m in entry.media_content:
+            if m.get("url") and (m.get("medium") == "image" or m.get("type", "").startswith("image")):
+                return m.get("url")
+    if hasattr(entry, "enclosures") and entry.enclosures:
+        for enc in entry.enclosures:
+            if enc.get("type", "").startswith("image"):
+                return enc.get("href") or enc.get("url")
+
+    # Fallback: first <img> embedded in content or summary HTML
+    # (covers webcomic-style feeds like Penny Arcade that don't use
+    # media:thumbnail/media:content/enclosure at all)
+    html_blobs = []
+    if hasattr(entry, "content") and entry.content:
+        html_blobs.extend(item.value for item in entry.content)
+    if hasattr(entry, "summary"):
+        html_blobs.append(entry.summary)
+    for blob in html_blobs:
+        match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', blob)
+        if match:
+            return match.group(1)
+
+    return None
+
+# -------------------------------
+# og:image fallback (page fetch, only when feed gives us nothing)
+# -------------------------------
+def fetch_og_image(url, timeout=5):
+    try:
+        resp = requests.get(
+            url,
+            timeout=timeout,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; r2g-bot/1.0)"},
+        )
+        resp.raise_for_status()
+        match = re.search(
+            r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
+            resp.text,
+            re.IGNORECASE,
+        )
+        if not match:
+            # some sites put content before property
+            match = re.search(
+                r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
+                resp.text,
+                re.IGNORECASE,
+            )
+        if match:
+            return match.group(1)
+    except Exception:
+        pass
+    return None    
+
 
 # -------------------------------
 # File that remembers sent items
@@ -69,6 +134,9 @@ else:
 # -------------------------------
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
+
+TITLE_STYLE = "font-size:1.2em;font-weight:bold;"
+META_STYLE = "font-style:italic;color:#666;font-size:0.9em;"
 
 # -------------------------------
 # Send email
@@ -169,26 +237,31 @@ for feed_url, category in RSS_FEEDS:
                 if "content" in entry:
                     for item in entry.content:
                         content += item.value + "\n\n"
+                content = content.strip()
+
+                summary_clean = re.sub("<[^<]+?>", "", summary).strip()
+                content_clean = re.sub("<[^<]+?>", "", content).strip()
+                show_full_content = bool(content) and content_clean != summary_clean and len(content_clean) > len(summary_clean) + 20
+
+                image_url = get_entry_image(entry)
+                if not image_url:
+                    image_url = fetch_og_image(link)
 
                 category_tag = category.lower().replace(" ", "")
                 subject_line = f"[RSS] {feed_title}: {title} #r2g #{category_tag}"
                 published = entry.get("published", "No date available")
 
-                email_body = f"""
-                <html>
-                    <body>
-                        <h2>{title}</h2>
-                        <p><strong>Feed:</strong> {feed_title}</p>
-                        <p><strong>Category:</strong> {category}</p>
-                        <p><strong>Link:</strong> <a href="{link}">{link}</a></p>
-                        <p><strong>Originally posted on:</strong> {published}</p>
-                        <h3>Summary:</h3>
-                        {summary}
-                        <h3>Full Content:</h3>
-                        {content}
-                    </body>
-                </html>
-                """
+                html_parts = [f"<p style='{TITLE_STYLE}'><a href='{link}'>{title}</a></p>"]
+                if image_url:
+                    html_parts.append(f"<a href='{link}'><img src='{image_url}' style='max-width:400px;'></a>")
+                html_parts.append(f"<p style='{META_STYLE}'>{feed_title} &middot; {category}</p>")
+                html_parts.append(f"<p style='{META_STYLE}'>Originally posted on {published}</p>")
+                html_parts.append(f"<h3>Summary:</h3>{summary}")
+                if show_full_content:
+                    html_parts.append(f"<h3>Full Content:</h3>{content}")
+                html_parts.append(f"<p><a href='{link}'>{link}</a></p>")
+
+                email_body = f"<html><body>{''.join(html_parts)}</body></html>"
 
                 email_sent = send_email(subject=subject_line, body_html=email_body)
 
