@@ -21,6 +21,10 @@ DEBUG = False
 # URL normalization
 # -------------------------------
 def normalize_url(url):
+    """Normalizes a URL for sent-items comparison: strips a leading
+    'www.', and collapses Penny Arcade's ext.penny-arcade.com subdomain
+    down to penny-arcade.com, since that feed alternates between the two
+    for the same articles and would otherwise cause duplicate sends."""
     parsed = urlparse(url)
     host = parsed.netloc
     if host.startswith("www."):
@@ -33,6 +37,13 @@ def normalize_url(url):
 # Image extraction (feed-provided only, no page fetch)
 # -------------------------------
 def get_entry_image(entry):
+    """Pulls a preview image straight from the feed entry, trying each
+    RSS/Atom convention in order: media:thumbnail, then media:content,
+    then a plain enclosure, then finally the first <img> found in the
+    entry's own HTML content/summary (covers feeds like Penny Arcade
+    that don't use any of the standard image fields). Returns None if
+    none of those produce anything - fetch_og_image() is the fallback
+    for that case."""
     if hasattr(entry, "media_thumbnail") and entry.media_thumbnail:
         url = entry.media_thumbnail[0].get("url")
         if url:
@@ -65,6 +76,12 @@ def get_entry_image(entry):
 # og:image fallback (page fetch, only when feed gives us nothing)
 # -------------------------------
 def fetch_og_image(url, timeout=5):
+    """Last-resort image fallback: fetches the article page itself and
+    regexes out its og:image meta tag. Only called when get_entry_image()
+    finds nothing in the feed data directly, since this costs a real page
+    request per entry. Returns None on any failure (timeout, no match,
+    non-200 response) rather than raising - a missing preview image
+    should never stop the entry from being sent."""
     try:
         resp = requests.get(
             url,
@@ -106,7 +123,7 @@ else:
 # -------------------------------
 # Load Gmail credentials safely
 # -------------------------------
-load_dotenv()
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 GMAIL_ADDRESS = os.getenv("GMAIL_ADDRESS")
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
 
@@ -135,8 +152,12 @@ else:
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 
-TITLE_STYLE = "font-size:1.2em;font-weight:bold;"
-META_STYLE = "font-style:italic;color:#666;font-size:0.9em;"
+BODY_STYLE = "font-family:'Atkinson Hyperlegible',-apple-system,Segoe UI,Helvetica,Arial,sans-serif;background:#123524;color:#F0EBE0;margin:0;padding:24px 16px;"
+CARD_STYLE = "border:1px solid #2F5B3E;border-radius:8px;padding:12px 16px;margin:22px 0;background:#1A4A30;max-width:680px;"
+TITLE_STYLE = "font-family:'Bricolage Grotesque',-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:1.2em;font-weight:bold;"
+META_STYLE = "font-style:italic;color:#B8AFA0;font-size:0.9em;"
+LINK_STYLE = "color:#FF8C42;text-decoration:none;"
+HEADER_STYLE = "font-family:'Bricolage Grotesque',-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#F0EBE0;"
 
 # -------------------------------
 # Send email
@@ -167,10 +188,31 @@ def get_entry_date(entry):
         return entry.updated_parsed
     return (0,) * 9
 
+def format_entry_date(entry):
+    """Human-readable date only, no time (e.g. 'Aug 7, 2026') - the byline
+    format CLAUDE.md's Category A spec calls for. Returns None if the feed
+    gives us no parseable date, so the byline can fall back to feed name
+    only instead of showing a wrong/placeholder date.
+    Avoids strftime's %-d/%#d day-of-month flags entirely since those are
+    platform-specific (Linux/Mac vs Windows) and would break on one or
+    the other."""
+    parsed = get_entry_date(entry)
+    if parsed == (0,) * 9:
+        return None
+    try:
+        return f"{time.strftime('%b', parsed)} {parsed.tm_mday}, {parsed.tm_year}"
+    except (ValueError, OverflowError):
+        return None
+
 # -------------------------------
 # Countdown exit
 # -------------------------------
 def countdown_exit(seconds=10):
+    """Waits `seconds` before exiting, polling for a keypress every
+    100ms so the console window can be kept open for review instead of
+    auto-closing. The OSError catch handles headless Task Scheduler
+    runs, where there's no console attached for msvcrt to poll at all -
+    in that case just exit immediately rather than erroring."""
     try:
         print(f"\nClosing in {seconds} seconds. Press any key to stay open.")
         for i in range(seconds, 0, -1):
@@ -247,21 +289,26 @@ for feed_url, category in RSS_FEEDS:
                 if not image_url:
                     image_url = fetch_og_image(link)
 
-                category_tag = category.lower().replace(" ", "")
-                subject_line = f"[RSS] {feed_title}: {title} #r2g #{category_tag}"
-                published = entry.get("published", "No date available")
+                subject_line = f"[RSS] {feed_title}: {title} #r2g"
+                date_str = format_entry_date(entry)
+                byline = f"{feed_title} &middot; {date_str}" if date_str else feed_title
 
-                html_parts = [f"<p style='{TITLE_STYLE}'><a href='{link}'>{title}</a></p>"]
+                html_parts = [f"<p style='{TITLE_STYLE}'><a href='{link}' style='{LINK_STYLE}'>{title}</a></p>"]
+                html_parts.append(f"<p style='{META_STYLE}'>{byline}</p>")
                 if image_url:
-                    html_parts.append(f"<a href='{link}'><img src='{image_url}' style='max-width:400px;'></a>")
-                html_parts.append(f"<p style='{META_STYLE}'>{feed_title} &middot; {category}</p>")
-                html_parts.append(f"<p style='{META_STYLE}'>Originally posted on {published}</p>")
-                html_parts.append(f"<h3>Summary:</h3>{summary}")
+                    html_parts.append(f"<a href='{link}'><img src='{image_url}' style='max-width:400px;border-radius:6px;'></a>")
+                html_parts.append(f"<h3 style='{HEADER_STYLE}'>Summary:</h3>{summary}")
                 if show_full_content:
-                    html_parts.append(f"<h3>Full Content:</h3>{content}")
-                html_parts.append(f"<p><a href='{link}'>{link}</a></p>")
+                    html_parts.append(f"<h3 style='{HEADER_STYLE}'>Full Content:</h3>{content}")
+                html_parts.append(f"<p><a href='{link}' style='{LINK_STYLE}'>{link}</a></p>")
 
-                email_body = f"<html><body>{''.join(html_parts)}</body></html>"
+                email_body = (
+                    f"<html><head><meta charset='utf-8'>"
+                    f"<meta name='color-scheme' content='dark'>"
+                    f"<meta name='supported-color-schemes' content='dark'></head>"
+                    f"<body style='{BODY_STYLE}'><div style='{CARD_STYLE}'>"
+                    f"{''.join(html_parts)}</div></body></html>"
+                )
 
                 email_sent = send_email(subject=subject_line, body_html=email_body)
 

@@ -18,6 +18,11 @@ def fetch_title(url):
         return None
 
 def update_missing_titles():
+    """Runs on startup: scans feeds.txt for any URL-only line (no
+    '| Title' yet), fetches that feed's title, and rewrites the line
+    with it filled in. Lets you paste a bare URL into feeds.txt by hand
+    and have the title show up in list_feeds() next time this runs,
+    without needing to go through add_feed()."""
     lines = parse_feeds_file()
     if not lines:
         return
@@ -76,6 +81,12 @@ def list_feeds():
     print(f"\n  {count} feeds total.")
 
 def add_feed():
+    """Interactive add flow: prompts for a URL, checks it's not already
+    in feeds.txt, auto-fetches the feed's title (or asks for one
+    manually if that fails), then walks the file line-by-line to insert
+    the new entry at the end of the chosen category's block - or creates
+    that category's header at the end of the file if it doesn't exist
+    yet."""
     print("\n=== Add Feed ===\n")
     url = input("Feed URL: ").strip()
     if not url:
@@ -125,7 +136,7 @@ def add_feed():
     i = 0
     while i < len(lines):
         new_lines.append(lines[i])
-        if lines[i].strip() == header:
+        if not inserted and lines[i].strip() == header:
             i += 1
             while i < len(lines) and not lines[i].strip().startswith("#") and lines[i].strip() != "":
                 new_lines.append(lines[i])
@@ -147,6 +158,10 @@ def add_feed():
     print(f"\n  Added to [{category}]: {title or url}")
 
 def remove_feed():
+    """Interactive remove flow: numbers every feed across all
+    categories for selection, confirms before deleting, then rewrites
+    feeds.txt with that entry's line dropped. A category header is
+    dropped too if removing its last entry empties it out."""
     print("\n=== Remove Feed ===\n")
     lines = parse_feeds_file()
     if not lines:
@@ -246,6 +261,11 @@ def main():
             print("Invalid choice.")
 
 def recategorize_feed():
+    """Interactive move flow: numbers every feed for selection, shows
+    the destination category list with the current one marked, then
+    removes the entry from its source category (dropping that header
+    too if it's now empty) and inserts it into the destination category
+    the same way add_feed() does."""
     print("\n=== Recategorize Feed ===\n")
     lines = parse_feeds_file()
     if not lines:
@@ -346,7 +366,7 @@ def recategorize_feed():
     i = 0
     while i < len(new_lines):
         final_lines.append(new_lines[i])
-        if new_lines[i].strip() == dest_header:
+        if not inserted and new_lines[i].strip() == dest_header:
             i += 1
             while i < len(new_lines) and not new_lines[i].strip().startswith("#") and new_lines[i].strip() != "":
                 final_lines.append(new_lines[i])
