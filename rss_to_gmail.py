@@ -153,8 +153,8 @@ SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 
 BODY_STYLE = "font-family:'Atkinson Hyperlegible',-apple-system,Segoe UI,Helvetica,Arial,sans-serif;background:#123524;color:#F0EBE0;margin:0;padding:24px 16px;"
-CARD_STYLE = "border:1px solid #2F5B3E;border-radius:8px;padding:12px 16px;margin:22px 0;background:#1A4A30;max-width:680px;"
-TITLE_STYLE = "font-family:'Bricolage Grotesque',-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:1.2em;font-weight:bold;"
+CARD_STYLE = "border:1px solid #2F5B3E;border-radius:8px;padding:12px 16px;margin:22px 0;background:#1A4A30;max-width:680px;color:#F0EBE0;"
+TITLE_STYLE = "font-family:'Bricolage Grotesque',-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:1.2em;font-weight:bold;color:#FF8C42;"
 META_STYLE = "font-style:italic;color:#B8AFA0;font-size:0.9em;"
 LINK_STYLE = "color:#FF8C42;text-decoration:none;"
 HEADER_STYLE = "font-family:'Bricolage Grotesque',-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#F0EBE0;"
