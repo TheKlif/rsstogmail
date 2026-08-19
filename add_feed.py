@@ -1,7 +1,10 @@
 import os
+import subprocess
+import sys
 import feedparser
 
 FEEDS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "feeds.txt")
+RSS_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rss_to_gmail.py")
 
 def parse_feeds_file():
     if not os.path.exists(FEEDS_FILE):
@@ -80,6 +83,10 @@ def list_feeds():
 
     print(f"\n  {count} feeds total.")
 
+def run_r2g():
+    print("\n=== Running r2g ===\n")
+    subprocess.run([sys.executable, RSS_SCRIPT])
+
 def add_feed():
     """Interactive add flow: prompts for a URL, checks it's not already
     in feeds.txt, auto-fetches the feed's title (or asks for one
@@ -156,6 +163,10 @@ def add_feed():
         f.writelines(new_lines)
 
     print(f"\n  Added to [{category}]: {title or url}")
+
+    run_now = input("\nRun r2g now to send backfill for this feed? (Y/N): ").strip().lower()
+    if run_now == "y":
+        run_r2g()
 
 def remove_feed():
     """Interactive remove flow: numbers every feed across all
@@ -242,6 +253,7 @@ def main():
         print("  2. Remove feed")
         print("  3. List all feeds")
         print("  4. Recategorize feed")
+        print("  5. Run r2g now")
         print("  Q. Quit")
 
         choice = input("\nChoose: ").strip().lower()
@@ -254,6 +266,8 @@ def main():
             list_feeds()
         elif choice == "4":
             recategorize_feed()
+        elif choice == "5":
+            run_r2g()
         elif choice == "q":
             print("\nGoodbye.")
             break
