@@ -1,16 +1,19 @@
 import os
 import subprocess
 import sys
+
 import feedparser
 
 FEEDS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "feeds.txt")
 RSS_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rss_to_gmail.py")
+
 
 def parse_feeds_file():
     if not os.path.exists(FEEDS_FILE):
         return []
     with open(FEEDS_FILE, "r", encoding="utf-8") as f:
         return f.readlines()
+
 
 def fetch_title(url):
     try:
@@ -19,6 +22,7 @@ def fetch_title(url):
         return title if title else None
     except Exception:
         return None
+
 
 def update_missing_titles():
     """Runs on startup: scans feeds.txt for any URL-only line (no
@@ -51,6 +55,7 @@ def update_missing_titles():
         with open(FEEDS_FILE, "w", encoding="utf-8") as f:
             f.writelines(new_lines)
 
+
 def list_categories():
     categories = []
     for line in parse_feeds_file():
@@ -60,6 +65,7 @@ def list_categories():
             if cat not in categories:
                 categories.append(cat)
     return categories
+
 
 def list_feeds():
     print("\n=== All Feeds ===\n")
@@ -83,9 +89,11 @@ def list_feeds():
 
     print(f"\n  {count} feeds total.")
 
+
 def run_r2g():
     print("\n=== Running r2g ===\n")
     subprocess.run([sys.executable, RSS_SCRIPT])
+
 
 def add_feed():
     """Interactive add flow: prompts for a URL, checks it's not already
@@ -112,7 +120,9 @@ def add_feed():
     if title:
         print(f"  Found: {title}")
     else:
-        title = input("  Could not fetch title. Enter one manually (or leave blank): ").strip()
+        title = input(
+            "  Could not fetch title. Enter one manually (or leave blank): "
+        ).strip()
 
     entry = f"{url} | {title}" if title else url
 
@@ -145,7 +155,11 @@ def add_feed():
         new_lines.append(lines[i])
         if not inserted and lines[i].strip() == header:
             i += 1
-            while i < len(lines) and not lines[i].strip().startswith("#") and lines[i].strip() != "":
+            while (
+                i < len(lines)
+                and not lines[i].strip().startswith("#")
+                and lines[i].strip() != ""
+            ):
                 new_lines.append(lines[i])
                 i += 1
             new_lines.append(entry + "\n")
@@ -164,9 +178,12 @@ def add_feed():
 
     print(f"\n  Added to [{category}]: {title or url}")
 
-    run_now = input("\nRun r2g now to send backfill for this feed? (Y/N): ").strip().lower()
+    run_now = (
+        input("\nRun r2g now to send backfill for this feed? (Y/N): ").strip().lower()
+    )
     if run_now == "y":
         run_r2g()
+
 
 def remove_feed():
     """Interactive remove flow: numbers every feed across all
@@ -227,7 +244,11 @@ def remove_feed():
             header_line = lines[i]
             i += 1
             section_entries = []
-            while i < len(lines) and not lines[i].strip().startswith("#") and lines[i].strip() != "":
+            while (
+                i < len(lines)
+                and not lines[i].strip().startswith("#")
+                and lines[i].strip() != ""
+            ):
                 if lines[i].strip().split("|")[0].strip() != target_url:
                     section_entries.append(lines[i])
                 i += 1
@@ -240,8 +261,9 @@ def remove_feed():
 
     with open(FEEDS_FILE, "w", encoding="utf-8") as f:
         f.writelines(new_lines)
-        
+
     print(f"\n  Removed: {target_title}")
+
 
 def main():
     print("=== RSS Feed Manager ===")
@@ -274,6 +296,7 @@ def main():
         else:
             print("Invalid choice.")
 
+
 def recategorize_feed():
     """Interactive move flow: numbers every feed for selection, shows
     the destination category list with the current one marked, then
@@ -299,7 +322,9 @@ def recategorize_feed():
             parts = stripped.split("|", 1)
             url = parts[0].strip()
             title = parts[1].strip() if len(parts) > 1 else url
-            numbered_entries.append((len(numbered_entries) + 1, url, title, current_category))
+            numbered_entries.append(
+                (len(numbered_entries) + 1, url, title, current_category)
+            )
             display_lines.append(("entry", len(numbered_entries), title, url))
 
     for item in display_lines:
@@ -361,7 +386,11 @@ def recategorize_feed():
             header_line = lines[i]
             i += 1
             section_entries = []
-            while i < len(lines) and not lines[i].strip().startswith("#") and lines[i].strip() != "":
+            while (
+                i < len(lines)
+                and not lines[i].strip().startswith("#")
+                and lines[i].strip() != ""
+            ):
                 if lines[i].strip().split("|")[0].strip() != target_url:
                     section_entries.append(lines[i])
                 i += 1
@@ -382,7 +411,11 @@ def recategorize_feed():
         final_lines.append(new_lines[i])
         if not inserted and new_lines[i].strip() == dest_header:
             i += 1
-            while i < len(new_lines) and not new_lines[i].strip().startswith("#") and new_lines[i].strip() != "":
+            while (
+                i < len(new_lines)
+                and not new_lines[i].strip().startswith("#")
+                and new_lines[i].strip() != ""
+            ):
                 final_lines.append(new_lines[i])
                 i += 1
             final_lines.append(entry_line)
@@ -400,6 +433,7 @@ def recategorize_feed():
         f.writelines(final_lines)
 
     print(f"\n  Moved '{target_title}' from [{source_category}] to [{new_category}].")
+
 
 if __name__ == "__main__":
     main()

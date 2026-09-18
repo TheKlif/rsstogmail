@@ -1,21 +1,22 @@
-import feedparser
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from dotenv import load_dotenv
-import os
-import traceback
-import time
 import msvcrt
+import os
 import re
-import requests
+import smtplib
+import time
+import traceback
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from urllib.parse import urlparse
 
+import feedparser
+import requests
+from dotenv import load_dotenv
 
 # -------------------------------
 # Debug toggle
 # -------------------------------
 DEBUG = False
+
 
 # -------------------------------
 # URL normalization
@@ -32,6 +33,7 @@ def normalize_url(url):
     if host == "ext.penny-arcade.com":
         host = "penny-arcade.com"
     return parsed._replace(netloc=host).geturl()
+
 
 # -------------------------------
 # Image extraction (feed-provided only, no page fetch)
@@ -50,7 +52,9 @@ def get_entry_image(entry):
             return url
     if hasattr(entry, "media_content") and entry.media_content:
         for m in entry.media_content:
-            if m.get("url") and (m.get("medium") == "image" or m.get("type", "").startswith("image")):
+            if m.get("url") and (
+                m.get("medium") == "image" or m.get("type", "").startswith("image")
+            ):
                 return m.get("url")
     if hasattr(entry, "enclosures") and entry.enclosures:
         for enc in entry.enclosures:
@@ -71,6 +75,7 @@ def get_entry_image(entry):
             return match.group(1)
 
     return None
+
 
 # -------------------------------
 # og:image fallback (page fetch, only when feed gives us nothing)
@@ -105,7 +110,7 @@ def fetch_og_image(url, timeout=5):
             return match.group(1)
     except Exception:
         pass
-    return None    
+    return None
 
 
 # -------------------------------
@@ -159,6 +164,7 @@ META_STYLE = "font-style:italic;color:#B8AFA0;font-size:0.9em;"
 LINK_STYLE = "color:#FF8C42;text-decoration:none;"
 HEADER_STYLE = "font-family:'Bricolage Grotesque',-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#F0EBE0;"
 
+
 # -------------------------------
 # Send email
 # -------------------------------
@@ -178,6 +184,7 @@ def send_email(subject, body_html):
         print(f"  ERROR: Email send failed: {e}")
         return False
 
+
 # -------------------------------
 # Entry date sort key
 # -------------------------------
@@ -187,6 +194,7 @@ def get_entry_date(entry):
     if hasattr(entry, "updated_parsed") and entry.updated_parsed:
         return entry.updated_parsed
     return (0,) * 9
+
 
 def format_entry_date(entry):
     """Human-readable date only, no time (e.g. 'Aug 7, 2026') - the byline
@@ -203,6 +211,7 @@ def format_entry_date(entry):
         return f"{time.strftime('%b', parsed)} {parsed.tm_mday}, {parsed.tm_year}"
     except (ValueError, OverflowError):
         return None
+
 
 # -------------------------------
 # Countdown exit
@@ -228,7 +237,8 @@ def countdown_exit(seconds=10):
     except OSError:
         # No console attached (headless Task Scheduler run). Exit quietly.
         return
-        
+
+
 # -------------------------------
 # Main
 # -------------------------------
@@ -283,7 +293,11 @@ for feed_url, category in RSS_FEEDS:
 
                 summary_clean = re.sub("<[^<]+?>", "", summary).strip()
                 content_clean = re.sub("<[^<]+?>", "", content).strip()
-                show_full_content = bool(content) and content_clean != summary_clean and len(content_clean) > len(summary_clean) + 20
+                show_full_content = (
+                    bool(content)
+                    and content_clean != summary_clean
+                    and len(content_clean) > len(summary_clean) + 20
+                )
 
                 image_url = get_entry_image(entry)
                 if not image_url:
@@ -293,14 +307,22 @@ for feed_url, category in RSS_FEEDS:
                 date_str = format_entry_date(entry)
                 byline = f"{feed_title} &middot; {date_str}" if date_str else feed_title
 
-                html_parts = [f"<p style='{TITLE_STYLE}'><a href='{link}' style='{LINK_STYLE}'>{title}</a></p>"]
+                html_parts = [
+                    f"<p style='{TITLE_STYLE}'><a href='{link}' style='{LINK_STYLE}'>{title}</a></p>"
+                ]
                 html_parts.append(f"<p style='{META_STYLE}'>{byline}</p>")
                 if image_url:
-                    html_parts.append(f"<a href='{link}'><img src='{image_url}' style='max-width:400px;border-radius:6px;'></a>")
+                    html_parts.append(
+                        f"<a href='{link}'><img src='{image_url}' style='max-width:400px;border-radius:6px;'></a>"
+                    )
                 html_parts.append(f"<h3 style='{HEADER_STYLE}'>Summary:</h3>{summary}")
                 if show_full_content:
-                    html_parts.append(f"<h3 style='{HEADER_STYLE}'>Full Content:</h3>{content}")
-                html_parts.append(f"<p><a href='{link}' style='{LINK_STYLE}'>{link}</a></p>")
+                    html_parts.append(
+                        f"<h3 style='{HEADER_STYLE}'>Full Content:</h3>{content}"
+                    )
+                html_parts.append(
+                    f"<p><a href='{link}' style='{LINK_STYLE}'>{link}</a></p>"
+                )
 
                 email_body = (
                     f"<html><head><meta charset='utf-8'>"
@@ -321,13 +343,17 @@ for feed_url, category in RSS_FEEDS:
                     feed_new += 1
                     total_new += 1
                 else:
-                    print(f"  SKIPPED (send failed, will retry next run): {feed_title}: {title}")
+                    print(
+                        f"  SKIPPED (send failed, will retry next run): {feed_title}: {title}"
+                    )
 
             except Exception as e:
                 print(f"  ERROR: Failed on entry in {feed_title}: {e}")
                 if DEBUG:
                     traceback.print_exc()
-                with open(os.path.join(BASE_DIR, "rss_errors.log"), "a", encoding="utf-8") as f:
+                with open(
+                    os.path.join(BASE_DIR, "rss_errors.log"), "a", encoding="utf-8"
+                ) as f:
                     f.write(f"Error in entry {link} of feed {feed_url}:\n")
                     traceback.print_exc(file=f)
                     f.write("\n\n")
@@ -350,5 +376,7 @@ for feed_url, category in RSS_FEEDS:
             traceback.print_exc(file=f)
             f.write("\n\n")
 
-print(f"\n--- Done. {total_feeds} feeds checked, {total_new} new emails sent, {total_skipped} already sent. ---")
+print(
+    f"\n--- Done. {total_feeds} feeds checked, {total_new} new emails sent, {total_skipped} already sent. ---"
+)
 countdown_exit(10)
