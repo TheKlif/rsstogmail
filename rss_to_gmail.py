@@ -34,6 +34,15 @@ def normalize_url(url):
         host = "penny-arcade.com"
     return parsed._replace(netloc=host).geturl()
 
+def clean_header_text(text):
+    """Collapses embedded newlines/tabs/runs of whitespace down to a
+    single space. Some feeds (Sarah's Scribbles among them) have a
+    literal line break inside a <title> element; passed straight into
+    an email Subject header, Python's email library rejects it outright
+    as a header-injection guard, which silently fails every entry from
+    that feed on every run."""
+    return re.sub(r"\s+", " ", text).strip()
+
 
 # -------------------------------
 # Image extraction (feed-provided only, no page fetch)
@@ -250,7 +259,7 @@ for feed_url, category in RSS_FEEDS:
     total_feeds += 1
     try:
         feed = feedparser.parse(feed_url)
-        feed_title = feed.feed.get("title", feed_url).strip()
+        feed_title = clean_header_text(feed.feed.get("title", feed_url))
 
         print(f"\nChecking feed: {feed_title}")
 
@@ -270,7 +279,7 @@ for feed_url, category in RSS_FEEDS:
             link = ""
             try:
                 link = entry.get("link", "").strip()
-                title = entry.get("title", "Untitled")
+                title = clean_header_text(entry.get("title", "Untitled"))
 
                 if DEBUG:
                     print(f"  [DEBUG] RAW LINK: {repr(link)}")
